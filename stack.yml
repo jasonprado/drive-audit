@@ -1,0 +1,28 @@
+# Configuration for an OpenFAAS function. Deploy like this:
+# > faas-cli secret create driveaudit-config.env --from-file=.env
+# > faas-cli secret create driveaudit-google-credential.json --from-file=google-credential.json
+# > faas-cli publish -f stack.yml --platforms linux/arm/v7,linux/amd64
+# > faas-cli deploy -f stack.yml
+
+version: 1.0
+provider:
+  name: openfaas
+functions:
+  drive-audit:
+    lang: python3
+    handler: ./driveaudit
+    image: ${DOCKER_USER:-jasonprado}/drive-audit:latest
+    annotations:
+      topic: cron-function
+      schedule: "@daily"
+    environment:
+      write_timeout: "1h"
+      read_timeout: "1h"
+      exec_timeout: "1h"
+      upstream_timeout: "1h"
+      write_debug: true
+    limits:
+      memory: 640Mi
+    secrets:
+      - driveaudit-config.env
+      - driveaudit-google-credential.json
