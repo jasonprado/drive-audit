@@ -20,6 +20,7 @@ SCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly', 'https://ww
 
 
 def run(spreadsheet_id, google_credential_path):
+  monkey_patch_socket_resolver()
   google_credentials = ServiceAccountCredentials.from_json_keyfile_name(
     google_credential_path, scopes=SCOPES)
 
@@ -99,7 +100,6 @@ def get_all_files(drive):
     else:
       all_files = df
     all_files = all_files[["id", "title", "anyoneWithLinkRole", "alternateLink", "ownerEmail"]]
-    break
 
   return all_files
 
@@ -108,7 +108,6 @@ def get_all_files(drive):
 @limits(calls=400, period=100)  # Rule is 500 requests per 100 seconds per project, and we're conservative
 def do_google_api_call(fn):
   fn()
-  time.sleep(.001)
 
 
 def get_existing_inventory(sheet):
@@ -117,6 +116,22 @@ def get_existing_inventory(sheet):
   default_false_map.update({'TRUE': True, 'FALSE': False})
   df['approvedForOpenAccess'] = df['approvedForOpenAccess'].map(default_false_map)
   return df
+
+
+def monkey_patch_socket_resolver():
+  # I consistently hit intermittent DNS issues running in Docker. Repeated resolutions fail.
+  # So cache them in-app. This is a hack.
+  import socket
+  prv_getaddrinfo = socket.getaddrinfo
+  dns_cache = {}  # or a weakref.WeakValueDictionary()
+  def new_getaddrinfo(*args):
+    try:
+      return dns_cache[args]
+    except KeyError:
+      res = prv_getaddrinfo(*args)
+      dns_cache[args] = res
+      return res
+  socket.getaddrinfo = new_getaddrinfo
 
 
 def main():
